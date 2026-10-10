@@ -1007,7 +1007,7 @@ function updateShop(dt:number){
 
 function updateMenu(dt:number){
   if(!g.menuOpen)return
-  const opts=['Party','Items','Save','Quit']
+  const opts=['Party','Items','Save','New Game','Quit']
   if(justPressed('ArrowUp')){g.menuCursor=(g.menuCursor+opts.length-1)%opts.length;sfx('select')}
   if(justPressed('ArrowDown')){g.menuCursor=(g.menuCursor+1)%opts.length;sfx('select')}
   if(actionPressed()){
@@ -1016,7 +1016,12 @@ function updateMenu(dt:number){
     else if(g.menuCursor===1){g.menuOpen=false;g.screen='shop'}
     else if(g.menuCursor===2){
       try{localStorage.setItem('inkjob99_save',JSON.stringify({px:g.px,py:g.py,pdir:g.pdir,money:g.money,party:g.party,inventory:g.inventory,npcDefeated:g.npcDefeated,fedBossDefeated:g.fedBossDefeated,vaultCleared:g.vaultCleared,battlesWon:g.battlesWon,printersCaught:g.printersCaught}));notify('Game saved!')}catch{notify('Save failed!')}
-    }else if(g.menuCursor===3){g.menuOpen=false;g.screen='overworld'}
+    }else if(g.menuCursor===3){
+      // New Game: clear save and restart fresh
+      try{localStorage.removeItem('inkjob99_save')}catch{}
+      g=newGame();g.screen='overworld';g.menuOpen=false;startBGM()
+      notify('New game started!')
+    }else if(g.menuCursor===4){g.menuOpen=false;g.screen='title'}
   }
   if(cancelPressed()){g.menuOpen=false;sfx('select')}
   if(justPressed('Escape')){g.menuOpen=false;sfx('select')}
@@ -1513,7 +1518,7 @@ function renderMenuOverlay(){
   ctx.strokeStyle=C.gold;ctx.lineWidth=1;ctx.strokeRect(40,30,200,120)
   ctx.fillStyle=C.gold;ctx.font='bold 7px monospace';ctx.textAlign='center'
   ctx.fillText('MENU',W/2,46)
-  const opts=['Party','Items','Save','Quit']
+  const opts=['Party','Items','Save','New Game','Quit']
   ctx.textAlign='left';ctx.font='6px monospace'
   for(let i=0;i<opts.length;i++){
     ctx.fillStyle=i===g.menuCursor?C.gold:C.white

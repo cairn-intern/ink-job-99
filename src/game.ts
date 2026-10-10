@@ -844,6 +844,16 @@ function updateOverworld(dt:number){
   else if(leftHeld()){dx=-1;g.pdir=2}
   else if(rightHeld()){dx=1;g.pdir=3}
 
+  // Tap-to-move: a freshly pressed direction steps immediately. Without this,
+  // a brief tap (shorter than the 0.18s hold threshold) never moves the player,
+  // which breaks automation and quick key taps. Hold-to-repeat still works.
+  if(justDown.has('ArrowUp')||justDown.has('KeyW')||
+     justDown.has('ArrowDown')||justDown.has('KeyS')||
+     justDown.has('ArrowLeft')||justDown.has('KeyA')||
+     justDown.has('ArrowRight')||justDown.has('KeyD')){
+    moveTimer=0.18
+  }
+
   if(dx!==0||dy!==0){
     moveTimer+=dt
     if(moveTimer>=0.18){

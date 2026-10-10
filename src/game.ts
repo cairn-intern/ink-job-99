@@ -26,7 +26,7 @@ const C = {
 // ─── Types ───────────────────────────────────────────────────
 
 type PrintType = 'offset'|'inkjet'|'laser'|'letterpress'|'thermo'|'screen'
-type GameScreen = 'title'|'overworld'|'battle'|'dialog'|'menu'|'shop'|'party'|'gameOver'
+type GameScreen = 'title'|'overworld'|'battle'|'dialog'|'menu'|'shop'|'party'|'gameOver'|'ending'
 
 interface MoveDef {
   name:string; type:PrintType; power:number; accuracy:number; pp:number;
@@ -54,7 +54,8 @@ interface BattlePrinter {
 }
 
 interface BattleState {
-  player:BattlePrinter; enemy:BattlePrinter; isTrainer:boolean;
+  player:BattlePrinter; enemy:BattlePrinter; isTrainer:boolean; trainer?:Npc;
+  isVaultBattle?:boolean;
   phase:'intro'|'playerTurn'|'fightMenu'|'itemMenu'|'executePlayer'|
         'executeEnemy'|'hitPlayer'|'hitEnemy'|'fainted'|'won'|'ran'|'text'|'levelUp';
   textLines:string[]; textTimer:number; textCallback:()=>void;
@@ -210,7 +211,7 @@ function makeNpcs(): Npc[] {
        'The warehouse district is rough.',
        'Keep your eyes peeled for feds.',
      ]},
-    {id:'boss',  x:8*TILE,y:25*TILE, dir:0, name:'AGENT STERLING', color:C.navy,
+    {id:'boss',  x:8*TILE,y:26*TILE, dir:0, name:'AGENT STERLING', color:C.navy,
      dialog:[
        'So you are the counterfeiter.',
        'I have been tracking you for months.',
@@ -231,8 +232,9 @@ function makeNpcs(): Npc[] {
      dialog:['WAREHOUSE DISTRICT — Authorized only.']},
     {id:'sign3', x:7*TILE,y:21*TILE, dir:0, name:'Sign', color:C.ltGray,
      dialog:['THE DOCKS — Smuggler\'s paradise.']},
-    {id:'guard', x:29*TILE,y:3*TILE, dir:3, name:'Guard', color:C.dkGray,
-     dialog:['Federal Building. No entry without clearance.']},
+    {id:'guard', x:37*TILE,y:4*TILE, dir:3, name:'Guard', color:C.dkGray,
+     dialog:['Federal Building. No entry without clearance.'],
+     onInteract:'vault'},
   ]
 }
 
@@ -708,6 +710,7 @@ interface GameData{
   npcs:Npc[]
   npcDefeated:Record<string,boolean>
   fedBossDefeated:boolean
+  vaultCleared:boolean
   // Camera
   camX:number;camY:number
   // Overworld animation
@@ -741,7 +744,7 @@ function newGame():GameData{
     px:11*TILE,py:10*TILE,pdir:0,
     money:500,stepCount:0,
     bumpTimer:0,party,inventory:{inkRefill:3,speedOil:1},
-    npcs:makeNpcs(),npcDefeated:{},fedBossDefeated:false,
+    npcs:makeNpcs(),npcDefeated:{},fedBossDefeated:false,vaultCleared:false,
     camX:0,camY:0,walkFrame:0,walkTimer:0,
     battle:null,dialog:null,
     menuCursor:0,menuOpen:false,shopCursor:0,partyCursor:0,
@@ -940,6 +943,25 @@ function interactNpc(npc:Npc){
         startBattle(scaled,true,npc)
       })
     }
+  }else if(npc.onInteract==='vault'){
+    if(!g.fedBossDefeated){
+      showDialog(['Federal Building. No entry without clearance.',
+        'Defeat Agent Sterling first.'],()=>{})
+    }else if(g.vaultCleared){
+      showDialog(['The vault is empty. GoldPress is yours now.',
+        'You are the Print Master!'],()=>{})
+    }else{
+      showDialog([
+        'Sterling defeated? Impressive.',
+        'The federal vault is open. GoldPress waits within.',
+        'Are you ready to face the legendary printer?',
+      ],()=>{
+        const goldpress=createPrinter('goldpress','GoldPress',25)
+        startBattle(goldpress,false) // Wild legendary (can't be a trainer)
+        // Mark as vault battle for ending trigger
+        if(g.battle)g.battle.isVaultBattle=true
+      })
+    }
   }else if(npc.onInteract==='give'){
     showDialog([...npc.dialog],()=>{
       if(g.party.length<6){
@@ -993,7 +1015,7 @@ function updateMenu(dt:number){
     if(g.menuCursor===0){g.menuOpen=false;g.screen='party';g.partyCursor=0}
     else if(g.menuCursor===1){g.menuOpen=false;g.screen='shop'}
     else if(g.menuCursor===2){
-      try{localStorage.setItem('inkjob99_save',JSON.stringify({px:g.px,py:g.py,pdir:g.pdir,money:g.money,party:g.party,inventory:g.inventory,npcDefeated:g.npcDefeated,fedBossDefeated:g.fedBossDefeated,battlesWon:g.battlesWon,printersCaught:g.printersCaught}));notify('Game saved!')}catch{notify('Save failed!')}
+      try{localStorage.setItem('inkjob99_save',JSON.stringify({px:g.px,py:g.py,pdir:g.pdir,money:g.money,party:g.party,inventory:g.inventory,npcDefeated:g.npcDefeated,fedBossDefeated:g.fedBossDefeated,vaultCleared:g.vaultCleared,battlesWon:g.battlesWon,printersCaught:g.printersCaught}));notify('Game saved!')}catch{notify('Save failed!')}
     }else if(g.menuCursor===3){g.menuOpen=false;g.screen='overworld'}
   }
   if(cancelPressed()){g.menuOpen=false;sfx('select')}
@@ -1029,7 +1051,7 @@ function startBattle(enemy:Printer,isTrainer:boolean,trainer?:Npc){
   g.battle={
     player:{printer:firstAlive,side:'player',x:40,y:120,shakeX:0,flash:0},
     enemy:{printer:enemy,side:'enemy',x:220,y:50,shakeX:0,flash:0},
-    isTrainer,
+    isTrainer,trainer,
     phase:'intro',
     textLines:[isTrainer?`${trainer!.name} sends out ${enemy.nickname}!`:`A wild ${enemy.nickname} (Lv${enemy.level}) appeared!`],
     textTimer:0,textCallback:()=>{},
@@ -1070,7 +1092,22 @@ function updateBattle(dt:number){
         // Enemy fainted
         b.phase='won'
         b.textLines=[`${b.enemy.printer.nickname} was defeated!`]
-        b.textCallback=()=>{g.screen='overworld';g.battle=null;startBGM()}
+        // Mark trainer as defeated (unlocks rematch block and quest flags)
+        if(b.isTrainer&&b.trainer){
+          g.npcDefeated[b.trainer.id]=true
+          b.trainer.defeated=true
+          if(b.trainer.id==='boss'){
+            g.fedBossDefeated=true
+          }
+        }
+        g.battlesWon++
+        // Vault battle victory triggers the ending
+        if(b.isVaultBattle){
+          g.vaultCleared=true
+          b.textCallback=()=>{g.screen='ending';g.battle=null;stopBGM();sfx('win')}
+        }else{
+          b.textCallback=()=>{g.screen='overworld';g.battle=null;startBGM()}
+        }
       }else{
         // Player fainted
         if(nextAlive){
@@ -1316,6 +1353,7 @@ function render(){
     case 'dialog':renderOverworld();renderDialog();break
     case 'shop':renderShop();break
     case 'gameOver':renderGameOver();break
+    case 'ending':renderEnding();break
   }
 
   // Fade overlay
@@ -1778,6 +1816,23 @@ function renderGameOver(){
   }
 }
 
+function renderEnding(){
+  ctx.fillStyle=C.black;ctx.fillRect(0,0,W,H)
+  ctx.textAlign='center'
+  ctx.fillStyle=C.gold;ctx.font='bold 16px monospace'
+  ctx.fillText('YOU WIN!',W/2,50)
+  ctx.fillStyle=C.white;ctx.font='8px monospace'
+  ctx.fillText('The legendary GoldPress is yours.',W/2,80)
+  ctx.fillText('Agent Sterling has been defeated.',W/2,95)
+  ctx.fillText('Ink City is safe once more.',W/2,110)
+  ctx.fillStyle=C.ltGray;ctx.font='7px monospace'
+  ctx.fillText(`Battles won: ${g.battlesWon}`,W/2,135)
+  if(Math.floor(g.titleBlink*2.5)%2===0){
+    ctx.fillStyle=C.white;ctx.font='bold 6px monospace'
+    ctx.fillText('PRESS ENTER TO CONTINUE',W/2,180)
+  }
+}
+
 // ─── Main Loop ───────────────────────────────────────────────
 
 let g:GameData
@@ -1800,8 +1855,8 @@ function init(){
       g=newGame();g.screen='overworld'
       Object.assign(g,{px:d.px,py:d.py,pdir:d.pdir,money:d.money,
         party:d.party,inventory:d.inventory,npcDefeated:d.npcDefeated||{},
-        fedBossDefeated:d.fedBossDefeated||false,battlesWon:d.battlesWon||0,
-        printersCaught:d.printersCaught||0})
+        fedBossDefeated:d.fedBossDefeated||false,vaultCleared:d.vaultCleared||false,
+        battlesWon:d.battlesWon||0,printersCaught:d.printersCaught||0})
       startBGM()
     }catch{g=newGame()}
   }else{g=newGame()}
@@ -1827,6 +1882,9 @@ function loop(time:number){
     case 'menu':break// handled inside updateOverworld
     case 'party':updateParty(dt);break
     case 'gameOver':
+      if(actionPressed()){g=newGame();g.screen='title'}
+      break
+    case 'ending':
       if(actionPressed()){g=newGame();g.screen='title'}
       break
   }

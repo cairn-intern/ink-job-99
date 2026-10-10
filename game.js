@@ -200,7 +200,7 @@ function makeNpcs() {
     {
       id: "boss",
       x: 8 * TILE,
-      y: 25 * TILE,
+      y: 26 * TILE,
       dir: 0,
       name: "AGENT STERLING",
       color: C.navy,
@@ -257,12 +257,13 @@ function makeNpcs() {
     },
     {
       id: "guard",
-      x: 29 * TILE,
-      y: 3 * TILE,
+      x: 37 * TILE,
+      y: 4 * TILE,
       dir: 3,
       name: "Guard",
       color: C.dkGray,
-      dialog: ["Federal Building. No entry without clearance."]
+      dialog: ["Federal Building. No entry without clearance."],
+      onInteract: "vault"
     }
   ];
 }
@@ -974,6 +975,7 @@ function newGame() {
     npcs: makeNpcs(),
     npcDefeated: {},
     fedBossDefeated: false,
+    vaultCleared: false,
     camX: 0,
     camY: 0,
     walkFrame: 0,
@@ -1164,6 +1166,29 @@ function interactNpc(npc) {
         startBattle(scaled, true, npc);
       });
     }
+  } else if (npc.onInteract === "vault") {
+    if (!g.fedBossDefeated) {
+      showDialog([
+        "Federal Building. No entry without clearance.",
+        "Defeat Agent Sterling first."
+      ], () => {});
+    } else if (g.vaultCleared) {
+      showDialog([
+        "The vault is empty. GoldPress is yours now.",
+        "You are the Print Master!"
+      ], () => {});
+    } else {
+      showDialog([
+        "Sterling defeated? Impressive.",
+        "The federal vault is open. GoldPress waits within.",
+        "Are you ready to face the legendary printer?"
+      ], () => {
+        const goldpress = createPrinter("goldpress", "GoldPress", 25);
+        startBattle(goldpress, false);
+        if (g.battle)
+          g.battle.isVaultBattle = true;
+      });
+    }
   } else if (npc.onInteract === "give") {
     showDialog([...npc.dialog], () => {
       if (g.party.length < 6) {
@@ -1232,7 +1257,7 @@ function updateMenu(dt) {
       g.screen = "shop";
     } else if (g.menuCursor === 2) {
       try {
-        localStorage.setItem("inkjob99_save", JSON.stringify({ px: g.px, py: g.py, pdir: g.pdir, money: g.money, party: g.party, inventory: g.inventory, npcDefeated: g.npcDefeated, fedBossDefeated: g.fedBossDefeated, battlesWon: g.battlesWon, printersCaught: g.printersCaught }));
+        localStorage.setItem("inkjob99_save", JSON.stringify({ px: g.px, py: g.py, pdir: g.pdir, money: g.money, party: g.party, inventory: g.inventory, npcDefeated: g.npcDefeated, fedBossDefeated: g.fedBossDefeated, vaultCleared: g.vaultCleared, battlesWon: g.battlesWon, printersCaught: g.printersCaught }));
         notify("Game saved!");
       } catch {
         notify("Save failed!");
@@ -1295,6 +1320,7 @@ function startBattle(enemy, isTrainer, trainer) {
     player: { printer: firstAlive, side: "player", x: 40, y: 120, shakeX: 0, flash: 0 },
     enemy: { printer: enemy, side: "enemy", x: 220, y: 50, shakeX: 0, flash: 0 },
     isTrainer,
+    trainer,
     phase: "intro",
     textLines: [isTrainer ? `${trainer.name} sends out ${enemy.nickname}!` : `A wild ${enemy.nickname} (Lv${enemy.level}) appeared!`],
     textTimer: 0,
@@ -1336,11 +1362,29 @@ function updateBattle(dt) {
       if (b.enemy.printer.hp <= 0) {
         b.phase = "won";
         b.textLines = [`${b.enemy.printer.nickname} was defeated!`];
-        b.textCallback = () => {
-          g.screen = "overworld";
-          g.battle = null;
-          startBGM();
-        };
+        if (b.isTrainer && b.trainer) {
+          g.npcDefeated[b.trainer.id] = true;
+          b.trainer.defeated = true;
+          if (b.trainer.id === "boss") {
+            g.fedBossDefeated = true;
+          }
+        }
+        g.battlesWon++;
+        if (b.isVaultBattle) {
+          g.vaultCleared = true;
+          b.textCallback = () => {
+            g.screen = "ending";
+            g.battle = null;
+            stopBGM();
+            sfx("win");
+          };
+        } else {
+          b.textCallback = () => {
+            g.screen = "overworld";
+            g.battle = null;
+            startBGM();
+          };
+        }
       } else {
         if (nextAlive) {
           b.player.printer = nextAlive;
@@ -1667,6 +1711,9 @@ function render() {
       break;
     case "gameOver":
       renderGameOver();
+      break;
+    case "ending":
+      renderEnding();
       break;
   }
   if (g.fadeAlpha > 0) {
@@ -2226,6 +2273,27 @@ function renderGameOver() {
     ctx.fillText("PRESS ENTER TO CONTINUE", W / 2, 160);
   }
 }
+function renderEnding() {
+  ctx.fillStyle = C.black;
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = "center";
+  ctx.fillStyle = C.gold;
+  ctx.font = "bold 16px monospace";
+  ctx.fillText("YOU WIN!", W / 2, 50);
+  ctx.fillStyle = C.white;
+  ctx.font = "8px monospace";
+  ctx.fillText("The legendary GoldPress is yours.", W / 2, 80);
+  ctx.fillText("Agent Sterling has been defeated.", W / 2, 95);
+  ctx.fillText("Ink City is safe once more.", W / 2, 110);
+  ctx.fillStyle = C.ltGray;
+  ctx.font = "7px monospace";
+  ctx.fillText(`Battles won: ${g.battlesWon}`, W / 2, 135);
+  if (Math.floor(g.titleBlink * 2.5) % 2 === 0) {
+    ctx.fillStyle = C.white;
+    ctx.font = "bold 6px monospace";
+    ctx.fillText("PRESS ENTER TO CONTINUE", W / 2, 180);
+  }
+}
 var g;
 var lastTime = 0;
 function init() {
@@ -2266,6 +2334,7 @@ function init() {
         inventory: d.inventory,
         npcDefeated: d.npcDefeated || {},
         fedBossDefeated: d.fedBossDefeated || false,
+        vaultCleared: d.vaultCleared || false,
         battlesWon: d.battlesWon || 0,
         printersCaught: d.printersCaught || 0
       });
@@ -2316,6 +2385,12 @@ function loop(time) {
       updateParty(dt);
       break;
     case "gameOver":
+      if (actionPressed()) {
+        g = newGame();
+        g.screen = "title";
+      }
+      break;
+    case "ending":
       if (actionPressed()) {
         g = newGame();
         g.screen = "title";

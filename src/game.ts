@@ -26,7 +26,7 @@ const C = {
 // ─── Types ───────────────────────────────────────────────────
 
 type PrintType = 'offset'|'inkjet'|'laser'|'letterpress'|'thermo'|'screen'
-type GameScreen = 'title'|'overworld'|'battle'|'dialog'|'menu'|'shop'|'party'|'gameOver'|'ending'
+type GameScreen = 'title'|'overworld'|'battle'|'dialog'|'menu'|'shop'|'party'|'gameOver'|'ending'|'inventory'
 
 interface MoveDef {
   name:string; type:PrintType; power:number; accuracy:number; pp:number;
@@ -1003,6 +1003,35 @@ function updateShop(dt:number){
   if(justPressed('ArrowDown')){g.shopCursor=Math.min(SHOP_ITEMS.length-1,g.shopCursor+1);sfx('select')}
 }
 
+function updateInventory(dt:number){
+  const items=Object.entries(g.inventory).filter(([k,v])=>v>0&&ITEMS[k])
+  if(actionPressed()&&items.length>0){
+    const[key,count]=items[Math.min(g.shopCursor,items.length-1)]||[]
+    const item=key?ITEMS[key]:null
+    if(item&&item.type==='heal'){
+      // Heal the most damaged alive party member
+      const target=g.party.filter(p=>p.hp>0&&p.hp<p.maxHp).sort((a,b)=>(a.hp/a.maxHp)-(b.hp/b.maxHp))[0]
+      if(target){
+        g.inventory[key]--
+        const amt=Math.min(item.power,target.maxHp-target.hp)
+        target.hp+=amt
+        sfx('heal');notify(`Used ${item.name} on ${target.nickname}! +${amt} HP`)
+      }else{
+        sfx('hit');notify('No one needs healing!')
+      }
+    }else if(item){
+      sfx('hit');notify('Cannot use that here!')
+    }
+  }
+  if(cancelPressed()||justPressed('Escape')){
+    g.screen='overworld';sfx('select')
+  }
+  if(items.length>0){
+    if(justPressed('ArrowUp')){g.shopCursor=Math.max(0,g.shopCursor-1);sfx('select')}
+    if(justPressed('ArrowDown')){g.shopCursor=Math.min(items.length-1,g.shopCursor+1);sfx('select')}
+  }
+}
+
 // ─── Menu ───────────────────────────────────────────────────
 
 function updateMenu(dt:number){
@@ -1013,7 +1042,7 @@ function updateMenu(dt:number){
   if(actionPressed()){
     sfx('confirm')
     if(g.menuCursor===0){g.menuOpen=false;g.screen='party';g.partyCursor=0}
-    else if(g.menuCursor===1){g.menuOpen=false;g.screen='shop'}
+    else if(g.menuCursor===1){g.menuOpen=false;g.screen='inventory';g.shopCursor=0}
     else if(g.menuCursor===2){
       try{localStorage.setItem('inkjob99_save',JSON.stringify({px:g.px,py:g.py,pdir:g.pdir,money:g.money,party:g.party,inventory:g.inventory,npcDefeated:g.npcDefeated,fedBossDefeated:g.fedBossDefeated,vaultCleared:g.vaultCleared,battlesWon:g.battlesWon,printersCaught:g.printersCaught}));notify('Game saved!')}catch{notify('Save failed!')}
     }else if(g.menuCursor===3){
@@ -1357,6 +1386,7 @@ function render(){
     case 'battle':renderBattle();break
     case 'dialog':renderOverworld();renderDialog();break
     case 'shop':renderShop();break
+    case 'inventory':renderInventory();break
     case 'gameOver':renderGameOver();break
     case 'ending':renderEnding();break
   }
@@ -1737,6 +1767,38 @@ function renderShop(){
   ctx.fillText('SPACE:buy  ESC:close',W/2,H-22)
 }
 
+function renderInventory(){
+  ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H)
+  ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(20,15,W-40,H-30)
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1;ctx.strokeRect(20,15,W-40,H-30)
+
+  ctx.fillStyle=C.gold;ctx.font='bold 8px monospace';ctx.textAlign='center'
+  ctx.fillText('ITEMS',W/2,32)
+
+  const items=Object.entries(g.inventory).filter(([k,v])=>v>0&&ITEMS[k])
+  ctx.textAlign='left';ctx.font='6px monospace'
+  if(items.length===0){
+    ctx.fillStyle=C.gray;ctx.textAlign='center'
+    ctx.fillText('No items.',W/2,80)
+  }else{
+    for(let i=0;i<items.length;i++){
+      const[key,count]=items[i]
+      const item=ITEMS[key]
+      const y=56+i*22
+      if(y>H-40)break
+      const sel=i===g.shopCursor
+      ctx.fillStyle=sel?'rgba(255,215,0,0.15)':'transparent';ctx.fillRect(24,y,W-48,20)
+      ctx.fillStyle=sel?C.gold:C.white
+      ctx.fillText(`${sel?'>':' '}${item.name} x${count}`,28,y+10)
+      ctx.fillStyle=C.gray;ctx.font='5px monospace'
+      ctx.fillText(item.desc,28,y+18)
+      ctx.font='6px monospace'
+    }
+  }
+  ctx.fillStyle=C.gray;ctx.font='6px monospace';ctx.textAlign='center'
+  ctx.fillText('SPACE:use  ESC:close',W/2,H-22)
+}
+
 // ─── Dialog Renderer ──────────────────────────────────────────
 
 function renderDialog(){
@@ -1884,6 +1946,7 @@ function loop(time:number){
     case 'dialog':updateDialog();break
     case 'battle':updateBattle(dt);break
     case 'shop':updateShop(dt);break
+    case 'inventory':updateInventory(dt);break
     case 'menu':break// handled inside updateOverworld
     case 'party':updateParty(dt);break
     case 'gameOver':

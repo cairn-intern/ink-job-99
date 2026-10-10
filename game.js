@@ -1237,7 +1237,7 @@ function updateShop(dt) {
 function updateMenu(dt) {
   if (!g.menuOpen)
     return;
-  const opts = ["Party", "Items", "Save", "Quit"];
+  const opts = ["Party", "Items", "Save", "New Game", "Quit"];
   if (justPressed("ArrowUp")) {
     g.menuCursor = (g.menuCursor + opts.length - 1) % opts.length;
     sfx("select");
@@ -1263,8 +1263,17 @@ function updateMenu(dt) {
         notify("Save failed!");
       }
     } else if (g.menuCursor === 3) {
-      g.menuOpen = false;
+      try {
+        localStorage.removeItem("inkjob99_save");
+      } catch {}
+      g = newGame();
       g.screen = "overworld";
+      g.menuOpen = false;
+      startBGM();
+      notify("New game started!");
+    } else if (g.menuCursor === 4) {
+      g.menuOpen = false;
+      g.screen = "title";
     }
   }
   if (cancelPressed()) {
@@ -1914,7 +1923,7 @@ function renderMenuOverlay() {
   ctx.font = "bold 7px monospace";
   ctx.textAlign = "center";
   ctx.fillText("MENU", W / 2, 46);
-  const opts = ["Party", "Items", "Save", "Quit"];
+  const opts = ["Party", "Items", "Save", "New Game", "Quit"];
   ctx.textAlign = "left";
   ctx.font = "6px monospace";
   for (let i = 0;i < opts.length; i++) {

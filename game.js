@@ -804,6 +804,17 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
 });
 document.addEventListener("keyup", (e) => keys.delete(e.key));
+function clearHeldInput() {
+  keys.clear();
+  justDown.clear();
+  touchX = -1;
+  touchY = -1;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden)
+    clearHeldInput();
+});
+window.addEventListener("pagehide", clearHeldInput);
 function setupTouch(cv) {
   const updateTouch = (e) => {
     const t = e.touches[0], r = cv.getBoundingClientRect();
@@ -1034,6 +1045,7 @@ function updateDialog() {
   }
 }
 var moveTimer = 0;
+var stuckMoveTimer = 0;
 function updateOverworld(dt) {
   if (g.menuOpen) {
     updateMenu(dt);
@@ -1081,6 +1093,7 @@ function updateOverworld(dt) {
         g.py = ny * TILE;
         g.walkFrame = (g.walkFrame + 1) % 2;
         g.stepCount++;
+        stuckMoveTimer = 0;
         g.encounterCooldown -= 0.18;
         if (g.encounterCooldown <= 0 && canEncounter(nx, ny) && Math.random() < 0.12) {
           g.encounterCooldown = 1.5;
@@ -1091,10 +1104,17 @@ function updateOverworld(dt) {
         }
       } else {
         g.bumpTimer = 0.12;
+        stuckMoveTimer += 0.18;
+        if (stuckMoveTimer > 3) {
+          stuckMoveTimer = 0;
+          clearHeldInput();
+          notify("Input reset - press a direction to move");
+        }
       }
     }
   } else {
     moveTimer = 0.15;
+    stuckMoveTimer = 0;
     g.walkFrame = 0;
   }
   if (actionPressed()) {

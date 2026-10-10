@@ -109,7 +109,7 @@ var MAP_DATA = [
   "T..W____W...RR....RR......W..W____W...D.W.TT",
   "T..W_CN_W...RR....RR......W..W_CN_W..._.W.TT",
   "T..W____W...RR....RR......W..W____W..._.W.TT",
-  "T..WWWDWWWWWWWWWWWWW......WWWWWWWDWWWW.W.TT",
+  "T..WWWDWWWWWWWWW.WWW......WWWWWWWDWWWW.W.TT",
   "T..........RR...............T..........W.TT",
   "T....TT.....RR...............T..WWWWWWWWW.TT",
   "T....TT.....RR..TTTTTT.......TT.........TTTT",

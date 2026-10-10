@@ -54,7 +54,7 @@ interface BattlePrinter {
 }
 
 interface BattleState {
-  player:BattlePrinter; enemy:BattlePrinter;
+  player:BattlePrinter; enemy:BattlePrinter; isTrainer:boolean;
   phase:'intro'|'playerTurn'|'fightMenu'|'itemMenu'|'executePlayer'|
         'executeEnemy'|'hitPlayer'|'hitEnemy'|'fainted'|'won'|'ran'|'text'|'levelUp';
   textLines:string[]; textTimer:number; textCallback:()=>void;
@@ -187,30 +187,30 @@ const ENCOUNTER_ZONES = [
 
 function makeNpcs(): Npc[] {
   return [
-    {id:'doc',   x:17,y:5, dir:1, name:'Doc Plates', color:C.white,
+    {id:'doc',   x:17*TILE,y:5*TILE, dir:1, name:'Doc Plates', color:C.white,
      dialog:[
        'Welcome to the Print Shop!',
        'I can restore your printers to full health.',
        'Stay safe out there, kid.',
      ], onInteract:'heal'},
-    {id:'sal',   x:17,y:4, dir:0, name:'Sal the Supplier', color:C.brown,
+    {id:'sal',   x:17*TILE,y:4*TILE, dir:0, name:'Sal the Supplier', color:C.brown,
      dialog:[
        'Need supplies? I got everything.',
        'Ink, plates, shields — you name it.',
      ], onInteract:'shop'},
-    {id:'tony',  x:14,y:13,dir:3, name:'Tony Two-Tone', color:C.red,
+    {id:'tony',  x:14*TILE,y:13*TILE,dir:3, name:'Tony Two-Tone', color:C.red,
      dialog:[
        'Hey! Think you can beat me?',
        "Let's see what your printers can do!",
      ], isTrainer:true, onInteract:'battle',
      party:[makePrinter('boltpress',6)],
      defeated:false},
-    {id:'frankie',x:24,y:17,dir:2, name:'Frankie Foil', color:C.purple,
+    {id:'frankie',x:24*TILE,y:17*TILE,dir:2, name:'Frankie Foil', color:C.purple,
      dialog:[
        'The warehouse district is rough.',
        'Keep your eyes peeled for feds.',
      ]},
-    {id:'boss',  x:8,y:25, dir:0, name:'AGENT STERLING', color:C.navy,
+    {id:'boss',  x:8*TILE,y:25*TILE, dir:0, name:'AGENT STERLING', color:C.navy,
      dialog:[
        'So you are the counterfeiter.',
        'I have been tracking you for months.',
@@ -218,20 +218,20 @@ function makeNpcs(): Npc[] {
      ], isTrainer:true, onInteract:'battle',
      party:[makePrinter('diehard',20),makePrinter('goldpress',18)],
      defeated:false},
-    {id:'guru',  x:5,y:12, dir:1, name:'Guru Gutenberg', color:C.gold,
+    {id:'guru',  x:5*TILE,y:12*TILE, dir:1, name:'Guru Gutenberg', color:C.gold,
      dialog:[
        'I hear there is a legendary printer...',
        'GoldPress — a machine of pure perfection.',
        'Some say it sleeps in the federal vault.',
        'Defeat Agent Sterling to open the door!',
      ]},
-    {id:'sign1', x:11,y:8, dir:0, name:'Sign', color:C.ltGray,
+    {id:'sign1', x:11*TILE,y:8*TILE, dir:0, name:'Sign', color:C.ltGray,
      dialog:['BACK ALLEY — Watch your step.']},
-    {id:'sign2', x:22,y:10,dir:0, name:'Sign', color:C.ltGray,
+    {id:'sign2', x:22*TILE,y:10*TILE,dir:0, name:'Sign', color:C.ltGray,
      dialog:['WAREHOUSE DISTRICT — Authorized only.']},
-    {id:'sign3', x:7,y:21, dir:0, name:'Sign', color:C.ltGray,
+    {id:'sign3', x:7*TILE,y:21*TILE, dir:0, name:'Sign', color:C.ltGray,
      dialog:['THE DOCKS — Smuggler\'s paradise.']},
-    {id:'guard', x:29,y:3, dir:3, name:'Guard', color:C.dkGray,
+    {id:'guard', x:29*TILE,y:3*TILE, dir:3, name:'Guard', color:C.dkGray,
      dialog:['Federal Building. No entry without clearance.']},
   ]
 }
@@ -624,7 +624,7 @@ function createPrinter(defId:string,nickname:string,level:number):Printer{
   const def=PRINTERS[defId]
   const hp=Math.floor(def.baseHp+level*3)
   return{
-    defId,nickname,level,xp:0,xpNext:level*level*2+10,
+    defId,nickname,level,xp:0,xpNext:xpToLevel(level+1),
     hp,maxHp:hp,atk:Math.floor(def.baseAtk+level*1.5),
     def:Math.floor(def.baseDef+level*1.2),spd:Math.floor(def.baseSpd+level*1.3),
     moves:def.moves.slice(0,4).map(id=>({defId:id,pp:MOVES[id].maxPp}))
@@ -816,6 +816,9 @@ function updateOverworld(dt:number){
     updateMenu(dt);return
   }
 
+  // Open menu with ESC
+  if(justPressed('Escape')){g.menuOpen=true;g.menuCursor=0;sfx('select');return}
+
   // Fade transition
   if(g.fadeAlpha<g.fadeTarget){
     g.fadeAlpha=Math.min(g.fadeTarget,g.fadeAlpha+dt*3)
@@ -997,6 +1000,7 @@ function startBattle(enemy:Printer,isTrainer:boolean,trainer?:Npc){
   g.battle={
     player:{printer:firstAlive,side:'player',x:40,y:120,shakeX:0,flash:0},
     enemy:{printer:enemy,side:'enemy',x:220,y:50,shakeX:0,flash:0},
+    isTrainer,
     phase:'intro',
     textLines:[isTrainer?`${trainer!.name} sends out ${enemy.nickname}!`:`A wild ${enemy.nickname} (Lv${enemy.level}) appeared!`],
     textTimer:0,textCallback:()=>{},
@@ -1033,17 +1037,11 @@ function updateBattle(dt:number){
     if(actionPressed()){
       // Switch to next printer or game over
       const nextAlive=g.party.find(p=>p.hp>0&&p!==b.player.printer)
-      if(b.enemy.hp<=0){
+      if(b.enemy.printer.hp<=0){
         // Enemy fainted
-        if(nextAlive){
-          b.phase='won'
-          b.textLines=[`${b.enemy.printer.nickname} was defeated!`]
-          b.textCallback=()=>{g.screen='overworld';g.battle=null;startBGM()}
-        }else{
-          b.phase='won'
-          b.textLines=[`${b.enemy.printer.nickname} was defeated!`]
-          b.textCallback=()=>{g.screen='overworld';g.battle=null;startBGM()}
-        }
+        b.phase='won'
+        b.textLines=[`${b.enemy.printer.nickname} was defeated!`]
+        b.textCallback=()=>{g.screen='overworld';g.battle=null;startBGM()}
       }else{
         // Player fainted
         if(nextAlive){
@@ -1079,11 +1077,13 @@ function updateBattle(dt:number){
         if(g.menuCursor===0){b.phase='fightMenu';b.selectedMove=0;sfx('confirm')}
         else{b.phase='itemMenu';g.shopCursor=0;sfx('confirm')}
       }else{
-        // Run
-        if(b.enemy.side==='enemy'&&!g.battle?.enemy.printer){
-          // Can always run from wild
+        // Run - can't run from trainer battles
+        if(b.isTrainer){
+          b.phase='text';b.textLines=['Cannot run from a trainer battle!'];sfx('hit')
+          b.textCallback=()=>{b.phase='playerTurn'}
+        }else{
+          b.phase='ran';b.textLines=['Got away safely!'];sfx('confirm')
         }
-        b.phase='ran';b.textLines=['Got away safely!'];sfx('confirm')
       }
     }
     if(cancelPressed()){/* already on main menu */}
@@ -1131,7 +1131,7 @@ function updateBattle(dt:number){
   if(b.phase==='executePlayer'){
     b.textTimer+=dt
     if(b.textTimer>1.5){
-      if(b.enemy.hp<=0){
+      if(b.enemy.printer.hp<=0){
         handleFaint('enemy');return
       }
       executeEnemyTurn()
@@ -1142,7 +1142,7 @@ function updateBattle(dt:number){
   if(b.phase==='executeEnemy'){
     b.textTimer+=dt
     if(b.textTimer>1.5){
-      if(b.player.hp<=0){
+      if(b.player.printer.hp<=0){
         handleFaint('player');return
       }
       b.phase='playerTurn';b.textLines=[];g.menuCursor=0
@@ -1180,7 +1180,7 @@ function executePlayerMove(){
   b.textCallback=()=>{}
 
   // XP gain
-  if(b.enemy.hp<=0){
+  if(b.enemy.printer.hp<=0){
     const xpGain=Math.floor(b.enemy.printer.level*15*effective)
     b.player.printer.xp+=xpGain
     // Check level up
@@ -1255,7 +1255,7 @@ function levelUp(p:Printer){
   p.atk=Math.floor(def.baseAtk+p.level*1.5)
   p.def=Math.floor(def.baseDef+p.level*1.2)
   p.spd=Math.floor(def.baseSpd+p.level*1.3)
-  p.xpNext=xpToLevel(p.level)
+  p.xpNext=xpToLevel(p.level+1)
   // Learn new move at certain levels
   if(p.level%5===0){
     const allMoves=PRINTERS[p.defId].moves

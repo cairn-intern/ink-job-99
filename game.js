@@ -1083,6 +1083,9 @@ function updateOverworld(dt) {
     dx = 1;
     g.pdir = 3;
   }
+  if (justDown.has("ArrowUp") || justDown.has("KeyW") || justDown.has("ArrowDown") || justDown.has("KeyS") || justDown.has("ArrowLeft") || justDown.has("KeyA") || justDown.has("ArrowRight") || justDown.has("KeyD")) {
+    moveTimer = 0.18;
+  }
   if (dx !== 0 || dy !== 0) {
     moveTimer += dt;
     if (moveTimer >= 0.18) {

@@ -144,7 +144,7 @@ function makeNpcs() {
   return [
     {
       id: "doc",
-      x: 17 * TILE,
+      x: 14 * TILE,
       y: 5 * TILE,
       dir: 1,
       name: "Doc Plates",

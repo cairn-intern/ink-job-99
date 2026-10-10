@@ -1737,6 +1737,7 @@ var canvas;
 var ctx;
 function render() {
   ctx.imageSmoothingEnabled = false;
+  ctx.setTransform(2, 0, 0, 2, 0, 0);
   switch (g.screen) {
     case "title":
       renderTitle();
@@ -2390,9 +2391,11 @@ var g;
 var lastTime = 0;
 function init() {
   canvas = document.getElementById("game");
-  canvas.width = W;
-  canvas.height = H;
+  const SCALE = 2;
+  canvas.width = W * SCALE;
+  canvas.height = H * SCALE;
   ctx = canvas.getContext("2d");
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   const allSprites = [
     "player_down",
     "player_up",

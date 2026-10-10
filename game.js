@@ -144,8 +144,8 @@ function makeNpcs() {
   return [
     {
       id: "doc",
-      x: 17,
-      y: 5,
+      x: 17 * TILE,
+      y: 5 * TILE,
       dir: 1,
       name: "Doc Plates",
       color: C.white,
@@ -158,8 +158,8 @@ function makeNpcs() {
     },
     {
       id: "sal",
-      x: 17,
-      y: 4,
+      x: 17 * TILE,
+      y: 4 * TILE,
       dir: 0,
       name: "Sal the Supplier",
       color: C.brown,
@@ -171,8 +171,8 @@ function makeNpcs() {
     },
     {
       id: "tony",
-      x: 14,
-      y: 13,
+      x: 14 * TILE,
+      y: 13 * TILE,
       dir: 3,
       name: "Tony Two-Tone",
       color: C.red,
@@ -187,8 +187,8 @@ function makeNpcs() {
     },
     {
       id: "frankie",
-      x: 24,
-      y: 17,
+      x: 24 * TILE,
+      y: 17 * TILE,
       dir: 2,
       name: "Frankie Foil",
       color: C.purple,
@@ -199,8 +199,8 @@ function makeNpcs() {
     },
     {
       id: "boss",
-      x: 8,
-      y: 25,
+      x: 8 * TILE,
+      y: 25 * TILE,
       dir: 0,
       name: "AGENT STERLING",
       color: C.navy,
@@ -216,8 +216,8 @@ function makeNpcs() {
     },
     {
       id: "guru",
-      x: 5,
-      y: 12,
+      x: 5 * TILE,
+      y: 12 * TILE,
       dir: 1,
       name: "Guru Gutenberg",
       color: C.gold,
@@ -230,8 +230,8 @@ function makeNpcs() {
     },
     {
       id: "sign1",
-      x: 11,
-      y: 8,
+      x: 11 * TILE,
+      y: 8 * TILE,
       dir: 0,
       name: "Sign",
       color: C.ltGray,
@@ -239,8 +239,8 @@ function makeNpcs() {
     },
     {
       id: "sign2",
-      x: 22,
-      y: 10,
+      x: 22 * TILE,
+      y: 10 * TILE,
       dir: 0,
       name: "Sign",
       color: C.ltGray,
@@ -248,8 +248,8 @@ function makeNpcs() {
     },
     {
       id: "sign3",
-      x: 7,
-      y: 21,
+      x: 7 * TILE,
+      y: 21 * TILE,
       dir: 0,
       name: "Sign",
       color: C.ltGray,
@@ -257,8 +257,8 @@ function makeNpcs() {
     },
     {
       id: "guard",
-      x: 29,
-      y: 3,
+      x: 29 * TILE,
+      y: 3 * TILE,
       dir: 3,
       name: "Guard",
       color: C.dkGray,
@@ -878,7 +878,7 @@ function createPrinter(defId, nickname, level) {
     nickname,
     level,
     xp: 0,
-    xpNext: level * level * 2 + 10,
+    xpNext: xpToLevel(level + 1),
     hp,
     maxHp: hp,
     atk: Math.floor(def.baseAtk + level * 1.5),
@@ -1000,7 +1000,7 @@ function isBlocked(x, y) {
   return false;
 }
 function canEncounter(tx, ty) {
-  const z = ENCOUNTER_ZONES.find((z2) => tx >= z2.x1 && tx <= z2.x2 && ty >= z2.y1 && ty <= z2.y2);
+  const z = ENCOUNTER_ZONES.find((z) => tx >= z.x1 && tx <= z.x2 && ty >= z.y1 && ty <= z.y2);
   return !!z;
 }
 function showDialog(lines, callback = () => {}) {
@@ -1037,6 +1037,12 @@ var moveTimer = 0;
 function updateOverworld(dt) {
   if (g.menuOpen) {
     updateMenu(dt);
+    return;
+  }
+  if (justPressed("Escape")) {
+    g.menuOpen = true;
+    g.menuCursor = 0;
+    sfx("select");
     return;
   }
   if (g.fadeAlpha < g.fadeTarget) {
@@ -1265,6 +1271,7 @@ function startBattle(enemy, isTrainer, trainer) {
   g.battle = {
     player: { printer: firstAlive, side: "player", x: 40, y: 120, shakeX: 0, flash: 0 },
     enemy: { printer: enemy, side: "enemy", x: 220, y: 50, shakeX: 0, flash: 0 },
+    isTrainer,
     phase: "intro",
     textLines: [isTrainer ? `${trainer.name} sends out ${enemy.nickname}!` : `A wild ${enemy.nickname} (Lv${enemy.level}) appeared!`],
     textTimer: 0,
@@ -1303,24 +1310,14 @@ function updateBattle(dt) {
   if (b.phase === "fainted") {
     if (actionPressed()) {
       const nextAlive = g.party.find((p) => p.hp > 0 && p !== b.player.printer);
-      if (b.enemy.hp <= 0) {
-        if (nextAlive) {
-          b.phase = "won";
-          b.textLines = [`${b.enemy.printer.nickname} was defeated!`];
-          b.textCallback = () => {
-            g.screen = "overworld";
-            g.battle = null;
-            startBGM();
-          };
-        } else {
-          b.phase = "won";
-          b.textLines = [`${b.enemy.printer.nickname} was defeated!`];
-          b.textCallback = () => {
-            g.screen = "overworld";
-            g.battle = null;
-            startBGM();
-          };
-        }
+      if (b.enemy.printer.hp <= 0) {
+        b.phase = "won";
+        b.textLines = [`${b.enemy.printer.nickname} was defeated!`];
+        b.textCallback = () => {
+          g.screen = "overworld";
+          g.battle = null;
+          startBGM();
+        };
       } else {
         if (nextAlive) {
           b.player.printer = nextAlive;
@@ -1374,10 +1371,18 @@ function updateBattle(dt) {
           sfx("confirm");
         }
       } else {
-        if (b.enemy.side === "enemy" && !g.battle?.enemy.printer) {}
-        b.phase = "ran";
-        b.textLines = ["Got away safely!"];
-        sfx("confirm");
+        if (b.isTrainer) {
+          b.phase = "text";
+          b.textLines = ["Cannot run from a trainer battle!"];
+          sfx("hit");
+          b.textCallback = () => {
+            b.phase = "playerTurn";
+          };
+        } else {
+          b.phase = "ran";
+          b.textLines = ["Got away safely!"];
+          sfx("confirm");
+        }
       }
     }
     if (cancelPressed()) {}
@@ -1456,7 +1461,7 @@ function updateBattle(dt) {
   if (b.phase === "executePlayer") {
     b.textTimer += dt;
     if (b.textTimer > 1.5) {
-      if (b.enemy.hp <= 0) {
+      if (b.enemy.printer.hp <= 0) {
         handleFaint("enemy");
         return;
       }
@@ -1467,7 +1472,7 @@ function updateBattle(dt) {
   if (b.phase === "executeEnemy") {
     b.textTimer += dt;
     if (b.textTimer > 1.5) {
-      if (b.player.hp <= 0) {
+      if (b.player.printer.hp <= 0) {
         handleFaint("player");
         return;
       }
@@ -1513,7 +1518,7 @@ function executePlayerMove() {
   b.textTimer = 0;
   b.textLines = [`${b.player.printer.nickname} used ${moveDef.name}!`, `${effText ? effText : ""} ${damage} damage!`.trim()];
   b.textCallback = () => {};
-  if (b.enemy.hp <= 0) {
+  if (b.enemy.printer.hp <= 0) {
     const xpGain = Math.floor(b.enemy.printer.level * 15 * effective);
     b.player.printer.xp += xpGain;
     if (b.player.printer.xp >= b.player.printer.xpNext) {
@@ -1597,7 +1602,7 @@ function levelUp(p) {
   p.atk = Math.floor(def.baseAtk + p.level * 1.5);
   p.def = Math.floor(def.baseDef + p.level * 1.2);
   p.spd = Math.floor(def.baseSpd + p.level * 1.3);
-  p.xpNext = xpToLevel(p.level);
+  p.xpNext = xpToLevel(p.level + 1);
   if (p.level % 5 === 0) {
     const allMoves = PRINTERS[p.defId].moves;
     if (allMoves.length > p.moves.length) {
@@ -1659,108 +1664,108 @@ function render() {
     ctx.globalAlpha = 1;
   }
 }
-function drawTile(ctx2, tile, x, y) {
+function drawTile(ctx, tile, x, y) {
   switch (tile) {
     case ".":
-      ctx2.fillStyle = (x + y) % 2 === 0 ? C.grass1 : C.grass2;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = C.dkGreen;
+      ctx.fillStyle = (x + y) % 2 === 0 ? C.grass1 : C.grass2;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.dkGreen;
       if ((x * 7 + y * 13) % 5 === 0) {
-        ctx2.fillRect(x + 3, y + 5, 1, 3);
-        ctx2.fillRect(x + 4, y + 4, 1, 2);
+        ctx.fillRect(x + 3, y + 5, 1, 3);
+        ctx.fillRect(x + 4, y + 4, 1, 2);
       }
       if ((x * 11 + y * 3) % 7 === 0) {
-        ctx2.fillRect(x + 10, y + 9, 1, 3);
-        ctx2.fillRect(x + 11, y + 8, 1, 2);
+        ctx.fillRect(x + 10, y + 9, 1, 3);
+        ctx.fillRect(x + 11, y + 8, 1, 2);
       }
       break;
     case "R":
-      ctx2.fillStyle = C.path;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = "#B8956A";
+      ctx.fillStyle = C.path;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#B8956A";
       if ((x + y) % 2 === 0)
-        ctx2.fillRect(x + 4, y + 4, 1, 1);
+        ctx.fillRect(x + 4, y + 4, 1, 1);
       break;
     case "W":
-      ctx2.fillStyle = C.wallExt;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = C.gray;
-      ctx2.fillRect(x, y, TILE, 1);
-      ctx2.fillRect(x, y, 1, TILE);
+      ctx.fillStyle = C.wallExt;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.gray;
+      ctx.fillRect(x, y, TILE, 1);
+      ctx.fillRect(x, y, 1, TILE);
       break;
     case "B":
-      ctx2.fillStyle = C.brick;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = "#A93226";
+      ctx.fillStyle = C.brick;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#A93226";
       for (let r = 0;r < 4; r++)
         for (let c = 0;c < 2; c++)
-          ctx2.fillRect(x + c * 8 + r % 2 * 4, y + r * 4, 6, 2);
+          ctx.fillRect(x + c * 8 + r % 2 * 4, y + r * 4, 6, 2);
       break;
     case "D":
-      ctx2.fillStyle = C.door;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = C.gold;
-      ctx2.fillRect(x + 6, y + 4, 4, 4);
-      ctx2.fillStyle = C.brown;
-      ctx2.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
-      ctx2.fillStyle = C.door;
-      ctx2.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
-      ctx2.fillStyle = C.gold;
-      ctx2.fillRect(x + 10, y + 6, 2, 2);
+      ctx.fillStyle = C.door;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.gold;
+      ctx.fillRect(x + 6, y + 4, 4, 4);
+      ctx.fillStyle = C.brown;
+      ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+      ctx.fillStyle = C.door;
+      ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+      ctx.fillStyle = C.gold;
+      ctx.fillRect(x + 10, y + 6, 2, 2);
       break;
     case "T":
-      ctx2.fillStyle = C.grass1;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = C.brown;
-      ctx2.fillRect(x + 6, y + 8, 4, 8);
-      ctx2.fillStyle = C.dkGreen;
-      ctx2.fillRect(x + 2, y + 1, 12, 8);
-      ctx2.fillStyle = C.green;
-      ctx2.fillRect(x + 3, y + 2, 10, 6);
-      ctx2.fillStyle = C.ltGreen;
-      ctx2.fillRect(x + 5, y + 3, 4, 3);
+      ctx.fillStyle = C.grass1;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.brown;
+      ctx.fillRect(x + 6, y + 8, 4, 8);
+      ctx.fillStyle = C.dkGreen;
+      ctx.fillRect(x + 2, y + 1, 12, 8);
+      ctx.fillStyle = C.green;
+      ctx.fillRect(x + 3, y + 2, 10, 6);
+      ctx.fillStyle = C.ltGreen;
+      ctx.fillRect(x + 5, y + 3, 4, 3);
       break;
     case "~":
-      ctx2.fillStyle = C.water;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = "#1F618D";
+      ctx.fillStyle = C.water;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = "#1F618D";
       const wo = Math.sin(Date.now() / 500 + x) * 2;
-      ctx2.fillRect(x + 2 + wo, y + 4, 6, 1);
-      ctx2.fillRect(x + 8 + wo, y + 10, 5, 1);
+      ctx.fillRect(x + 2 + wo, y + 4, 6, 1);
+      ctx.fillRect(x + 8 + wo, y + 10, 5, 1);
       break;
     case "_":
-      ctx2.fillStyle = (x + y) % 2 === 0 ? C.floor : C.darkFloor;
-      ctx2.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = (x + y) % 2 === 0 ? C.floor : C.darkFloor;
+      ctx.fillRect(x, y, TILE, TILE);
       break;
     case "C":
-      ctx2.fillStyle = C.counter;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = C.wood;
-      ctx2.fillRect(x, y, TILE, 2);
+      ctx.fillStyle = C.counter;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.wood;
+      ctx.fillRect(x, y, TILE, 2);
       break;
     case "X":
-      ctx2.fillStyle = C.wood;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = C.brown;
-      ctx2.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
-      ctx2.fillStyle = C.dkGray;
-      ctx2.fillRect(x + 4, y + 4, 2, 2);
-      ctx2.fillRect(x + 10, y + 4, 2, 2);
-      ctx2.fillRect(x + 4, y + 10, 2, 2);
-      ctx2.fillRect(x + 10, y + 10, 2, 2);
+      ctx.fillStyle = C.wood;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.brown;
+      ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+      ctx.fillStyle = C.dkGray;
+      ctx.fillRect(x + 4, y + 4, 2, 2);
+      ctx.fillRect(x + 10, y + 4, 2, 2);
+      ctx.fillRect(x + 4, y + 10, 2, 2);
+      ctx.fillRect(x + 10, y + 10, 2, 2);
       break;
     case "F":
-      ctx2.fillStyle = C.fence;
-      ctx2.fillRect(x, y, TILE, TILE);
-      ctx2.fillStyle = C.wood;
-      ctx2.fillRect(x + 2, y, 4, TILE);
-      ctx2.fillRect(x + 10, y, 4, TILE);
-      ctx2.fillRect(x, y + 3, TILE, 2);
-      ctx2.fillRect(x, y + 11, TILE, 2);
+      ctx.fillStyle = C.fence;
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.wood;
+      ctx.fillRect(x + 2, y, 4, TILE);
+      ctx.fillRect(x + 10, y, 4, TILE);
+      ctx.fillRect(x, y + 3, TILE, 2);
+      ctx.fillRect(x, y + 11, TILE, 2);
       break;
     default:
-      ctx2.fillStyle = C.black;
-      ctx2.fillRect(x, y, TILE, TILE);
+      ctx.fillStyle = C.black;
+      ctx.fillRect(x, y, TILE, TILE);
   }
 }
 function renderOverworld() {

@@ -188,7 +188,7 @@ const ENCOUNTER_ZONES = [
 
 function makeNpcs(): Npc[] {
   return [
-    {id:'doc',   x:17*TILE,y:5*TILE, dir:1, name:'Doc Plates', color:C.white,
+    {id:'doc',   x:14*TILE,y:5*TILE, dir:1, name:'Doc Plates', color:C.white,
      dialog:[
        'Welcome to the Print Shop!',
        'I can restore your printers to full health.',

@@ -1379,6 +1379,8 @@ let ctx:CanvasRenderingContext2D
 
 function render(){
   ctx.imageSmoothingEnabled=false
+  // Re-apply 2x scale (init sets it; this guards against any reset)
+  ctx.setTransform(2,0,0,2,0,0)
 
   switch(g.screen){
     case 'title': renderTitle();break
@@ -1907,8 +1909,12 @@ let lastTime=0
 
 function init(){
   canvas=document.getElementById('game')as HTMLCanvasElement
-  canvas.width=W;canvas.height=H
+  // Render at 2x internal resolution for sharp text on HiDPI displays.
+  // Game logic stays in 320x240 coordinates; the context scale maps it.
+  const SCALE=2
+  canvas.width=W*SCALE;canvas.height=H*SCALE
   ctx=canvas.getContext('2d')!
+  ctx.setTransform(SCALE,0,0,SCALE,0,0)
   // Pre-cache sprites
   const allSprites=['player_down','player_up','player_left','player_right',
     'inkjet','offset','laser','letterpress','thermo','screen','diehard','goldpress',

@@ -585,6 +585,12 @@ const justDown=new Set<string>()
 let touchX=-1,touchY=-1
 document.addEventListener('keydown',e=>{keys.add(e.key);justDown.add(e.key);if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault()})
 document.addEventListener('keyup',e=>keys.delete(e.key))
+// Stuck-key recovery: a missed keyup/touchend with no focus loss can wedge
+// a direction forever (movement reads the held set, menus read justDown).
+// Clear held input on every page-hide signal, not just blur.
+function clearHeldInput(){keys.clear();justDown.clear();touchX=-1;touchY=-1}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)clearHeldInput()})
+window.addEventListener('pagehide',clearHeldInput)
 
 function setupTouch(cv:HTMLCanvasElement){
   const updateTouch=(e:TouchEvent)=>{
@@ -811,6 +817,7 @@ function updateDialog(){
 // ─── Overworld Update ────────────────────────────────────────
 
 let moveTimer=0
+let stuckMoveTimer=0 // watchdog: seconds spent bumping into a wall with no step
 function updateOverworld(dt:number){
   if(g.menuOpen){
     updateMenu(dt);return
@@ -846,6 +853,7 @@ function updateOverworld(dt:number){
         g.px=nx*TILE;g.py=ny*TILE
         g.walkFrame=(g.walkFrame+1)%2
         g.stepCount++
+        stuckMoveTimer=0
         // Encounters
         g.encounterCooldown-=0.18
         if(g.encounterCooldown<=0&&canEncounter(nx,ny)&&Math.random()<0.12){
@@ -857,10 +865,21 @@ function updateOverworld(dt:number){
         }
       }else{
         g.bumpTimer=0.12
+        // Stuck-key watchdog: a direction held into a wall for seconds with
+        // no successful step means its keyup was missed and the key is wedged
+        // in the held set (the else-if chain then ignores all other input).
+        // Drop held input so a fresh press is required to keep moving.
+        stuckMoveTimer+=0.18
+        if(stuckMoveTimer>3){
+          stuckMoveTimer=0
+          clearHeldInput()
+          notify('Input reset - press a direction to move')
+        }
       }
     }
   }else{
     moveTimer=0.15
+    stuckMoveTimer=0
     g.walkFrame=0
   }
 

@@ -97,7 +97,8 @@ var ITEMS = {
   freshPlate: { name: "Fresh Plate", type: "heal", power: 999, price: 400, desc: "Fully restores HP" },
   speedOil: { name: "Speed Oil", type: "buff", power: 2, price: 100, desc: "+2 SPD for battle" },
   atkInk: { name: "Attack Ink", type: "buff", power: 2, price: 100, desc: "+2 ATK for battle" },
-  defShield: { name: "Defense Shield", type: "buff", power: 2, price: 100, desc: "+2 DEF for battle" }
+  defShield: { name: "Defense Shield", type: "buff", power: 2, price: 100, desc: "+2 DEF for battle" },
+  blankCart: { name: "Blank Cartridge", type: "capture", power: 0, price: 200, desc: "Catch a wild printer" }
 };
 var MAP_W = 40;
 var MAP_H = 30;
@@ -1085,7 +1086,7 @@ function updateOverworld(dt) {
     dx = 1;
     g.pdir = 3;
   }
-  if (justDown.has("ArrowUp") || justDown.has("KeyW") || justDown.has("ArrowDown") || justDown.has("KeyS") || justDown.has("ArrowLeft") || justDown.has("KeyA") || justDown.has("ArrowRight") || justDown.has("KeyD")) {
+  if (justDown.has("ArrowUp") || justDown.has("w") || justDown.has("W") || justDown.has("ArrowDown") || justDown.has("s") || justDown.has("S") || justDown.has("ArrowLeft") || justDown.has("a") || justDown.has("A") || justDown.has("ArrowRight") || justDown.has("d") || justDown.has("D")) {
     moveTimer = 0.18;
   }
   if (dx !== 0 || dy !== 0) {
@@ -1203,7 +1204,7 @@ function interactNpc(npc) {
     showDialog(npc.dialog, () => {});
   }
 }
-var SHOP_ITEMS = ["inkRefill", "inkTank", "freshPlate", "speedOil", "atkInk", "defShield"];
+var SHOP_ITEMS = ["inkRefill", "inkTank", "freshPlate", "speedOil", "atkInk", "defShield", "blankCart"];
 function openShop() {
   g.screen = "shop";
   g.shopCursor = 0;
@@ -1534,8 +1535,8 @@ function updateBattle(dt) {
     return;
   }
   if (b.phase === "itemMenu") {
-    const healItems = Object.entries(g.inventory).filter(([k, v]) => v > 0 && ITEMS[k] && ITEMS[k].type === "heal");
-    if (healItems.length === 0) {
+    const usableItems = Object.entries(g.inventory).filter(([k, v]) => v > 0 && ITEMS[k] && (ITEMS[k].type === "heal" || ITEMS[k].type === "capture" && !b.isTrainer));
+    if (usableItems.length === 0) {
       b.textLines = ["No items!"];
       b.phase = "text";
       b.textCallback = () => {
@@ -1549,11 +1550,11 @@ function updateBattle(dt) {
       sfx("select");
     }
     if (justPressed("ArrowDown")) {
-      g.shopCursor = Math.min(healItems.length - 1, g.shopCursor + 1);
+      g.shopCursor = Math.min(usableItems.length - 1, g.shopCursor + 1);
       sfx("select");
     }
     if (actionPressed()) {
-      const [key] = healItems[g.shopCursor] || [];
+      const [key] = usableItems[g.shopCursor] || [];
       const item = ITEMS[key];
       if (item && item.type === "heal") {
         g.inventory[key]--;
@@ -1563,6 +1564,33 @@ function updateBattle(dt) {
         b.phase = "text";
         b.textLines = [`Used ${item.name}! +${amt} HP`];
         b.textCallback = () => executeEnemyTurn();
+      } else if (item && item.type === "capture") {
+        g.inventory[key]--;
+        const hpFrac = b.enemy.printer.hp / b.enemy.printer.maxHp;
+        const catchRate = 0.3 + 0.6 * (1 - hpFrac);
+        sfx("confirm");
+        if (Math.random() < catchRate) {
+          const caught = createPrinter(b.enemy.printer.defId, b.enemy.printer.nickname, b.enemy.printer.level);
+          caught.hp = caught.maxHp;
+          g.printersCaught++;
+          b.phase = "text";
+          if (g.party.length < 6) {
+            g.party.push(caught);
+            b.textLines = [`Caught ${caught.nickname}!`, `Added to your party.`];
+          } else {
+            b.textLines = [`Caught ${caught.nickname}!`, `Party full - sent to storage.`];
+          }
+          sfx("win");
+          b.textCallback = () => {
+            g.screen = "overworld";
+            g.battle = null;
+            startBGM();
+          };
+        } else {
+          b.phase = "text";
+          b.textLines = [`The wild ${b.enemy.printer.nickname} broke free!`];
+          b.textCallback = () => executeEnemyTurn();
+        }
       }
     }
     if (cancelPressed()) {
@@ -2142,13 +2170,13 @@ function renderBattle() {
     ctx.strokeStyle = C.gold;
     ctx.lineWidth = 1;
     ctx.strokeRect(0, H - 70, W, 68);
-    const healItems = Object.entries(g.inventory).filter(([k, v]) => v > 0 && ITEMS[k] && ITEMS[k].type === "heal");
+    const usableItems = Object.entries(g.inventory).filter(([k, v]) => v > 0 && ITEMS[k] && (ITEMS[k].type === "heal" || ITEMS[k].type === "capture" && !b.isTrainer));
     ctx.font = "bold 6px monospace";
     ctx.textAlign = "left";
     ctx.fillStyle = C.gold;
     ctx.fillText("Items:", 8, H - 56);
-    for (let i = 0;i < healItems.length; i++) {
-      const [key, count] = healItems[i];
+    for (let i = 0;i < usableItems.length; i++) {
+      const [key, count] = usableItems[i];
       const item = ITEMS[key];
       ctx.fillStyle = i === g.shopCursor ? C.gold : C.white;
       ctx.fillText(`${i === g.shopCursor ? ">" : " "}${item.name} x${count}`, 8, H - 38 + i * 14);
